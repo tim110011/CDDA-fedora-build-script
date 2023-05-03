@@ -27,16 +27,16 @@ patch_dir="$git_dir/$local-patch"
 
 # https://github.com/CleverRaven/Cataclysm-DDA/blob/master/doc/COMPILING/COMPILING.md
 iJobNum=$(($(nproc)+0))
-#iJobNum=7
+
+#makeflags=(-j"$iJobNum" CLANG=1 CCACHE=1 RELEASE=1 LTO=1 TILES=1 SOUND=1 LOCALIZE=1 LANGUAGES="$lang" DYNAMIC_LINKING=0 RUNTESTS=0)
+#makeflags=(-j"$iJobNum" CLANG=1 MOLD=1 CCACHE=1 RELEASE=1 LTO=0 TILES=1 SOUND=1 LOCALIZE=1 LANGUAGES="$lang" DYNAMIC_LINKING=1)
 makeflags=(-j"$iJobNum" CLANG=0 CCACHE=1 RELEASE=1 LTO=1 TILES=1 SOUND=1 LOCALIZE=1 LANGUAGES="$lang" DYNAMIC_LINKING=0 RUNTESTS=0)
 bOptimizeForYourCPU=1
 
 ts="$(date +%Y%m%d_%H%M%S)"
-build_dir="$git_dir/../tmp/$local"
-install_dir="$git_dir/../$local-install-$ts/$local"
 
-build_dir="$(readlink -m "$git_dir/../tmp/$local-$ts")"				# you may want to delete this dir after install
-install_dir="$(readlink -m "$git_dir/../$ts/$local")"					# built wine binary here!
+build_dir="$(readlink -m "$git_dir/../tmp/$local")"
+install_dir="$(readlink -m "$git_dir/../$ts/$local")"
 
 ########################################
 #     end of user settings        #
