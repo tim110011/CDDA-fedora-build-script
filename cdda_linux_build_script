@@ -4,7 +4,7 @@ set -e
 # CDDA linux build script
 # CHANGE USER SETTINGS BEFORE USE!
 
-VERSION=1.2.0
+VERSION=1.2.1
 
 ########################################
 #          USER SETTINGS               #
@@ -140,6 +140,7 @@ f_build_branch()
     f_git_config
     if (( gitcfg == 1 )); then
         git checkout -b my_custom_build
+        gitcfg=2
     fi
 }
 
