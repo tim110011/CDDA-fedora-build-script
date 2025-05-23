@@ -4,7 +4,7 @@ set -e
 # CDDA linux build script
 # CHANGE USER SETTINGS BEFORE USE!
 
-VERSION=1.2.1
+VERSION=1.2.2
 
 ########################################
 #          USER SETTINGS               #
@@ -29,7 +29,8 @@ install_dir="/mnt/hd/me/tmp/$ts/$local"        #install to this dir
 git_user_email='user@e.mail'        # set git config user.mail
 git_user_name='username'        # set git config user.name
 
-march_native=1                # add -march=native -pipe to Makefile. maybe optimize for ONLY your building CPU, build faster
+march_native=1                # add -march=native to Makefile. maybe optimize for ONLY your building CPU
+pipe=1                      # add -pipe to Makefile. build faster
 disable_crater=1                # disable crater, i do not like it
 keep_statsthroughskills=1        # keep StatsThroughSkills mod until changes are not revertable, i like it. Obsolete Stats through Skills #80780 https://github.com/CleverRaven/Cataclysm-DDA/pull/80780
 
@@ -49,9 +50,8 @@ makeflags=(-j"$iJobNum"\
     LANGUAGES="$lang"\
     TESTS=0\
     RUNTESTS=0\
-    PCH=0\
     )
-
+    #PCH=0\
 ########################################
 #         end of USER SETTINGS         #
 ########################################
@@ -85,6 +85,7 @@ clbs_check_dependencies()
 #clean build branch and files
 f_clean()
 {
+    git stash
     git checkout master
     if git branch -D my_custom_build; then :; fi
     git clean -fdx
@@ -144,11 +145,19 @@ f_build_branch()
     fi
 }
 
-f_march_native()
+f_mod_makefile()
 {
     f_build_branch
-    sed -Ei 's/ *# OTHERS \+= -march=native.*/  OTHERS \+= -march=native -pipe/' Makefile
-    git commit -a -m 'Add build option: -march=native -pipe'
+    if (( pipe == 1 && march_native ==1 )); then
+        sed -Ei 's/ *# OTHERS \+= -march=native.*/  OTHERS \+= -march=native -pipe/' Makefile
+        git commit -a -m 'Add build option: -march=native -pipe'
+    elif (( pipe == 1 && march_native ==0 )); then
+        sed -Ei 's/ *# OTHERS \+= -march=native.*/  OTHERS \+= -pipe/' Makefile
+        git commit -a -m 'Add build option: -pipe'
+    elif (( pipe == 0 && march_native ==1 )); then
+        sed -Ei 's/ *# OTHERS \+= -march=native.*/  OTHERS \+= -march=native/' Makefile
+        git commit -a -m 'Add build option: -march=native'
+    fi
     clbs_pause
 }
 
@@ -169,7 +178,7 @@ f_disable_crater()
     #sed -Ei 's/"check_for_locations_area": \[ \{ "type": \[ "land", "road", "agricultural" \]/"check_for_locations_area": \[ \{ "type": \[  \]/' data/json/overmap/overmap_mutable/crater.json
     sed -Ei 's/"mx_crater": [0-9]+/"mx_crater": 0/g' data/json/regional_map_settings.json
     git commit -a -m 'Disable crater'
-    clbs_pause
+    #clbs_pause
 }
 
 # apply custom patch
@@ -232,7 +241,10 @@ printf 'CDDA linux build script %s\n\n    CHANGE USER SETTINGS BEFORE USE!    \n
 printf 'Make flags:\n'
 printf '    %s\n' "${makeflags[@]}"
 printf '\n'
+
+
 (( march_native == 1 )) && printf '    -march=native\n'
+(( pipe == 1)) && printf '    -pipe\n'
 (( keep_statsthroughskills == 1 )) && printf '    keep StatsThroughSkills mod\n'
 (( disable_crater == 1 )) && printf '    disable crater\n'
 
@@ -244,13 +256,15 @@ if (( bCheckDependencies == 1 )); then clbs_check_dependencies; fi
 clbs_update
 clbs_version
 
-if (( march_native == 1 )); then f_march_native; fi
+if (( march_native == 1 || pipe == 1)); then f_mod_makefile; fi
 if (( keep_statsthroughskills == 1 )); then f_keep_statsthroughskills; fi
-if (( disable_crater == 1 )); then f_disable_crater; fi
 
 if (( bPatch == 1 )); then clbs_patch "$patch_dir"; fi
 
 clbs_build
+
+if (( disable_crater == 1 )); then f_disable_crater; fi
+
 clbs_install
 
 #}
