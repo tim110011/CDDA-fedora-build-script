@@ -25,5 +25,4 @@ Modify "USER SETTINGS" section and run.
 **可选功能:**
 1. 控制一些 Makefile 选项。
 2. 增加 -march=native -pipe 编译参数, 可能会改善性能和编译速度.
-3. 保留了【技能增加属性】MOD, 直到源码的改变不可撤销。
-4. 关闭弹坑。
+3. 关闭部分弹坑。
