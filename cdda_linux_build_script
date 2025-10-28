@@ -239,7 +239,7 @@ clbs_install()
     for d in "${dir_list[@]}"; do mkdir -p "$install_dir"/"$d"; done
     for (( i=0 ; i < ${#list[@]} ; i++ )); do
         if [ -e "${list[i]}" ]; then
-            cp -Rv "${list[i]}" "$install_dir"/"${list[i]}"
+            cp -R "${list[i]}" "$install_dir"/"${list[i]}"
         else
             printf '[WARN] %s is missing!\n' "${list[i]}"
         fi
@@ -283,5 +283,4 @@ if (( disable_crater == 1 )); then f_disable_crater; fi
 
 clbs_install
 
-rm /home/me/.local/share/recently-used.xbel
 #}
