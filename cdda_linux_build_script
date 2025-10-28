@@ -4,27 +4,27 @@ set -e
 # CDDA linux build script
 # CHANGE USER SETTINGS BEFORE USE!
 
-VERSION=1.2.2
+VERSION=1.3.0
 
 ########################################
 #          USER SETTINGS               #
 ########################################
 
-remote_url="https://github.com/CleverRaven/Cataclysm-DDA.git"        # cdda git repo url
+remote_source_url="https://github.com/CleverRaven/Cataclysm-DDA.git"          # cdda source git repo url
 git_dir="/mnt/hd/me/git_local"                                        # local git repos dir
-local="$(echo "$remote_url" | sed -E 's|^.*/||g; s|\..*$||g')"        # local cdda repo dir name, use default name: "Cataclysm-DDA"
-gitrev='HEAD'                                                        # option: [ HEAD, commit,tag ] default: HEAD;  use commit or tag to build specified revision
+gitrev='HEAD'                                                        # option: [ HEAD, commit,tag ]  build which revision. default: HEAD;  use commit or tag
 lang="zh_CN"                                                        # choose language
 
 bCheckDependencies=0                # should always set to 0. fedora only. use dnf check dependencies
 
 bPause=1                            # default: 1;  1: pause scritp after function, see terminal output; 0: no pause, build until success or fail
 bUpdate=1                            # should always set to 1: pull updates from remote; 0: skip check update
+bUpdateTilesets=1                    # should always set to 1: download tilesets; 0: skip
 bPatch=0                            # default: 0;  0: don't use custom patches; 1: use some custom patches
 patch_dir="$git_dir/$local-patch"    # put your custom patches in this dir
 
 ts="$(date +%Y%m%d_%H%M%S)"
-install_dir="/mnt/hd/me/tmp/$ts/$local"        #install to this dir
+install_dir="/mnt/hd/me/tmp/$ts/Cataclysm-DDA"        #install to this dir
 
 git_user_email='user@e.mail'        # set git config user.mail
 git_user_name='username'        # set git config user.name
@@ -32,7 +32,6 @@ git_user_name='username'        # set git config user.name
 march_native=1                # add -march=native to Makefile. maybe optimize for ONLY your building CPU
 pipe=1                      # add -pipe to Makefile. build faster
 disable_crater=1                # disable crater, i do not like it
-keep_statsthroughskills=1        # keep StatsThroughSkills mod until changes are not revertable, i like it. Obsolete Stats through Skills #80780 https://github.com/CleverRaven/Cataclysm-DDA/pull/80780
 
 iJobNum=$(($(nproc)))
 
@@ -52,6 +51,10 @@ makeflags=(-j"$iJobNum"\
     RUNTESTS=0\
     )
     #PCH=0\
+
+#download tilesets you use from https://github.com/I-am-Erk/CDDA-Tilesets/releases
+tileset=(Altica.zip ChibiUltica.zip MshockXotto+.zip Ultica_iso.zip UltimateCataclysm.zip)
+
 ########################################
 #         end of USER SETTINGS         #
 ########################################
@@ -92,22 +95,24 @@ f_clean()
     git restore .
 }
 
+#usage: clbs_update git_url
 clbs_update()
 {
     [ -d "$git_dir" ] || mkdir -p "$git_dir"
     cd "$git_dir" || exit 1
 
+    local="$(echo "$1" | sed -E 's|^.*/||g; s|\..*$||g')"
+
     if [ -d ./"$local"/.git ]; then
         cd ./"$local"
+        f_clean
         if (( bUpdate == 1 )); then
-            f_clean
             git pull
         else
-            f_clean
-            printf '%s update skipped.\n' "$local"
+            printf '%s update skipped.\n' "$1"
         fi
     else
-        git clone "$remote_url" "$local"
+        git clone "$1" "$local"
         cd ./"$local"
     fi
 
@@ -161,22 +166,12 @@ f_mod_makefile()
     clbs_pause
 }
 
-f_keep_statsthroughskills()
-{
-    f_build_branch
-    git revert --no-edit -m 1 9a38c0f6a19ca97fb32878392f9404ab5e965a5d
-    git revert --no-edit -m 1 fd5feb4fa9dd7c94d0ec3b0629af67079fe5c91a
-    git revert --no-edit -m 1 1f0e741b42b7749b9ad960fba3e823bde5d7884a
-    git revert --no-edit -m 1 a2660f7f1b5c07ab0edfa70b399400abfa6aa495
-    clbs_pause
-}
-
 f_disable_crater()
 {
     f_build_branch
     sed -Ei 's/"occurrences": \[ 66, 100 \]/"occurrences": \[ 0, 0 \]/' data/json/overmap/overmap_mutable/crater.json
     #sed -Ei 's/"check_for_locations_area": \[ \{ "type": \[ "land", "road", "agricultural" \]/"check_for_locations_area": \[ \{ "type": \[  \]/' data/json/overmap/overmap_mutable/crater.json
-    sed -Ei 's/"mx_crater": [0-9]+/"mx_crater": 0/g' data/json/regional_map_settings.json
+    sed -Ei 's/"mx_crater": [0-9]+/"mx_crater": 0/g' data/json/region_settings/region_settings/regional_map_settings.json
     git commit -a -m 'Disable crater'
     #clbs_pause
 }
@@ -198,6 +193,30 @@ clbs_build()
     make "${makeflags[@]}"
 }
 
+f_install_tilesets()
+{
+    #example dwonload link:  https://github.com/I-am-Erk/CDDA-Tilesets/releases/download/2025-01-05/Altica.zip
+    tilesets_url='https://github.com/I-am-Erk/CDDA-Tilesets/releases'
+    #get tilesets release date from github release page, generate download link, eg: 2025-01-05
+    trdate="$(curl -s "$tilesets_url" | grep -E -m 1 "Tilesets Release [0-9]{4}-[0-9]{2}-[0-9]{2}" | sed -E 's|^.*Tilesets Release ||g; s|<\/h2>||g')"
+    [ -n "$trdate" ] || { printf "[ERROR] get tilesets release date failed. \$trdate=%s" "$trdate"; exit 1; }
+
+    cd "$git_dir"
+    mkdir -p "$trdate"
+    cd "$trdate"
+    declare -i i
+    for (( i=${#tileset[@]}; i--; )); do
+        #echo ${tileset[i]}
+        curl -JLO "$tilesets_url/download/$trdate/${tileset[i]}"
+    done
+
+    for f in ./*.zip; do
+        unzip "$f"
+    done
+
+    cp -R ./*/ "$install_dir"/gfx
+}
+
 # replace `make install`
 clbs_install()
 {
@@ -212,7 +231,7 @@ clbs_install()
             data/credits\
             data/title\
             data/fontdata.json )
-    if [[ "${makeflags[*]}" =~ TILES=1 ]]; then list+=( gfx cataclysm-tiles ); else list+=( cataclysm ); fi
+    if [[ "${makeflags[*]}" =~ TILES=1 ]]; then list+=( gfx cataclysm-tiles zzip ); else list+=( cataclysm zzip ); fi
     if [[ "${makeflags[*]}" =~ SOUND=1 ]]; then list+=( data/sound ); fi
     if [[ "${makeflags[*]}" =~ LANGUAGES=.+ ]]; then list+=( lang/mo ); fi
 
@@ -220,13 +239,15 @@ clbs_install()
     for d in "${dir_list[@]}"; do mkdir -p "$install_dir"/"$d"; done
     for (( i=0 ; i < ${#list[@]} ; i++ )); do
         if [ -e "${list[i]}" ]; then
-            cp -R "${list[i]}" "$install_dir"/"${list[i]}"
+            cp -Rv "${list[i]}" "$install_dir"/"${list[i]}"
         else
             printf '[WARN] %s is missing!\n' "${list[i]}"
         fi
     done
 
     f_clean
+
+    if (( bUpdateTilesets == 1 )); then f_install_tilesets; fi
 
     time_end=$( date '+%T' )
     printf '[INFO] Make end.\n'
@@ -245,7 +266,6 @@ printf '\n'
 
 (( march_native == 1 )) && printf '    -march=native\n'
 (( pipe == 1)) && printf '    -pipe\n'
-(( keep_statsthroughskills == 1 )) && printf '    keep StatsThroughSkills mod\n'
 (( disable_crater == 1 )) && printf '    disable crater\n'
 
 printf 'Start building %s?\n\n' "$gitrev"
@@ -253,18 +273,15 @@ clbs_pause
 
 if (( bCheckDependencies == 1 )); then clbs_check_dependencies; fi
 
-clbs_update
+
+clbs_update "$remote_source_url"
 clbs_version
-
 if (( march_native == 1 || pipe == 1)); then f_mod_makefile; fi
-if (( keep_statsthroughskills == 1 )); then f_keep_statsthroughskills; fi
-
 if (( bPatch == 1 )); then clbs_patch "$patch_dir"; fi
-
 clbs_build
-
 if (( disable_crater == 1 )); then f_disable_crater; fi
 
 clbs_install
 
+rm /home/me/.local/share/recently-used.xbel
 #}
